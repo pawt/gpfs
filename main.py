@@ -215,16 +215,22 @@ def createInstallDir(system, gpfs):
 
     mkdirOutput = system.before.splitlines()[1:]
 
-    if not mkdirOutput[0]:
+    if not mkdirOutput:
         system.sendline("find /tmp -name GPFS.%s"%gpfs)
         system.prompt()
         findGpfsDirOutput = system.before.splitlines()[1:]
-        if findGpfsDirOutput[0]:
+        if not findGpfsDirOutput:
             print("OK")
-            print("Install dir has been created: " + findGpfsDirOutput[0])
+            print("Install dir has been created: " + findGpfsDirOutput)
         else:
-            print("FAIL\nERROR:")
-
+            print("FAIL\n")
+            sys.exit()
+            # TODO: dodac info co za fail i dlaczego
+    else:
+        print("FAIL")
+        for line in mkdirOutput:
+            print("ERROR: " + line)
+        sys.exit()
 
 if __name__ == "__main__":
 
