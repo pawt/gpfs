@@ -106,18 +106,18 @@ def systemPreCheck(system, gpfs):
         print("FAIL")
         sys.exit("ERROR: Can't find cs_gpfs_ls_check in /tmp. Check it manually & correct it.")
 
+    return gpfsTarName
 
 def checkCurrentGPFSVersion(system):
-    print("\nChecking currently installed GPFS version ...")
+    print("\nChecking currently installed GPFS version...")
     system.sendline("mmdsh 'mmfsadm dump version | grep Build'")
     system.prompt()
     checkGPFSVersionOutput = system.before.split("\n")[1:]
     # mmfsadm dump version | grep Build | awk -F \" '{print $2}' | sed 's/ /_/g'
     checkGPFSVersionOutput = [entry for entry in checkGPFSVersionOutput if entry]
+
     for node in checkGPFSVersionOutput:
         print(node)
-
-    pass
 
 
 def checkIfFileExists(system):
@@ -155,6 +155,8 @@ def checkIfNodesAreActive(system):
         else:
             print(nodeState + " : " + "OK")
 
+    return activeNodeList.keys() # returns the list of all nodes names
+
 
 def disableTraces(system):
 
@@ -185,7 +187,7 @@ def disableTraces(system):
 
 
 def saveMmlsxxOutput(system):
-    print("\nExecuting cs_gpfs_ls_check script ... -> ", end='')
+    print("\nExecuting cs_gpfs_ls_check script... -> ", end='')
     system.sendline("cd /tmp; ./cs_gpfs_ls_check")
     system.prompt()
 
@@ -199,7 +201,7 @@ def saveMmlsxxOutput(system):
         findMmcheckOutput = system.before.splitlines()[1:]
         if findMmcheckOutput[0]:
             print("OK")
-            print("Mmmlsxx commands have been saved: " + findMmcheckOutput[0])
+            print("Mmmlsxx commands saved: " + findMmcheckOutput[0])
         else:
             print("FAIL\nERROR: Expected file (mmcheck*) has not been created.")
             sys.exit()
@@ -209,27 +211,88 @@ def saveMmlsxxOutput(system):
 
 
 def createInstallDir(system, gpfs):
-    print("\nCreating a new installation directory... -> ", end='')
-    system.sendline("mkdir /tmp/GPFS.%s"%gpfs)
+    print("\nCreating a new installation directory on all nodes... -> ", end='')
+    system.sendline('mmdsh "mkdir /tmp/GPFS.%s"' % gpfs)
     system.prompt()
 
     mkdirOutput = system.before.splitlines()[1:]
 
+    # TODO: dopracowac sprawdzanie czy ten katalog pojawil sie na wszystkich node'ach
+
     if not mkdirOutput:
-        system.sendline("find /tmp -name GPFS.%s"%gpfs)
+        system.sendline('mmdsh "find /tmp -name GPFS.%s"' % gpfs)
         system.prompt()
+
         findGpfsDirOutput = system.before.splitlines()[1:]
-        if not findGpfsDirOutput:
+
+        if findGpfsDirOutput:
+            installDirPath = findGpfsDirOutput[0].split()[1]
             print("OK")
-            print("Install dir has been created: " + findGpfsDirOutput)
+            for node in findGpfsDirOutput:
+                print("Install dir created on " + node)
+            return installDirPath
         else:
-            print("FAIL\n")
+            print("FAIL")
+            for line in findGpfsDirOutput:
+                print("ERROR: " + line)
             sys.exit()
-            # TODO: dodac info co za fail i dlaczego
     else:
         print("FAIL")
         for line in mkdirOutput:
             print("ERROR: " + line)
+        sys.exit()
+
+
+
+def copyGPFSTarFile(system, tarName, installDir, targetNode):
+    print("\nCopying tar file on main mode (%s)... -> " % targetNode, end='')
+
+    system.sendline("cp /tmp/%s %s/." % (tarName, installDir))
+    system.prompt()
+
+    cpTarOutput = system.before.splitlines()[1:]
+
+    if not cpTarOutput:
+        system.sendline("find %s -name %s" % (installDir, tarName))
+        system.prompt()
+        findGpfsTarOutput = system.before.splitlines()[1:]
+        if findGpfsTarOutput:
+            print("OK")
+            print("Tar file copied: " + findGpfsTarOutput[0])
+        else:
+            print("FAIL")
+            sys.exit("ERROR:Can't find %s/%s . Check it manually." % (installDir, tarName))
+    else:
+        print("FAIL")
+        for line in cpTarOutput:
+            print("ERROR: " + line)
+        sys.exit()
+
+def distributeGPFSTarFile(system, targetNode, installDir, tarName, nodeList):
+
+    print("\nCopying tar file to all nodes... -> ", end='')
+    system.sendline('mmdsh "scp -p {0}:{1}/{2} {1}/. |sort"'.format(targetNode, installDir, tarName))
+    system.prompt()
+
+    system.sendline('mmdsh "find {0} -name {1}"'.format(installDir, tarName))
+    system.prompt()
+
+    # TODO: dopracowac sprawdzanie czy ten plik pojawil sie na wszystkich node'ach?
+
+    findDistributedTarOutput = system.before.splitlines()[2:]
+
+    if len(findDistributedTarOutput) == len(nodeList):
+            print("OK")
+            for node in findDistributedTarOutput:
+                print("GPFS tar copied to " + node)
+    else:
+        if not findDistributedTarOutput:
+            print("FAIL\nERROR: Can't find copied GPFS tar on any node. Check it manually.")
+        else:
+            print("FAIL\nERROR: Can't find copied GPFS tar on ALL nodes. Only on the following: ")
+            for line in findDistributedTarOutput:
+                print(line)
+        print("\nThe full list of nodes: " + str(nodeList))
         sys.exit()
 
 if __name__ == "__main__":
@@ -240,13 +303,16 @@ if __name__ == "__main__":
         cs = pxssh.pxssh()
         print("\n\nSSH-ing to ETERNUS CS (%s)..." % host)
         cs.login(host,user,password)
-        systemPreCheck(cs, gpfsVersion)
+        gpfsTarFileName  = systemPreCheck(cs, gpfsVersion)
         targetNode = getMainNodeName(cs)
         checkCurrentGPFSVersion(cs)
-        checkIfNodesAreActive(cs)
+        nodesList = checkIfNodesAreActive(cs)
         #disableTraces(cs)
         #saveMmlsxxOutput(cs)
-        createInstallDir(cs, gpfsVersion)
+        installDirPath = createInstallDir(cs, gpfsVersion)
+        copyGPFSTarFile(cs,gpfsTarFileName,installDirPath, targetNode)
+        if len(nodesList) != 1:
+            distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
 
         print("\n===== THE END ======\n")
 
