@@ -361,9 +361,7 @@ if __name__ == "__main__":
             distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
 
         unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
-
         stoppingCSandGPFS(cs)
-
         print("\n===== THE END ======\n")
 
     except pxssh.ExceptionPxssh, error:
