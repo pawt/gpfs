@@ -13,6 +13,7 @@ from __future__ import print_function
 import os
 import sys
 import re
+import time
 import getopt
 import getpass
 import pxssh
@@ -81,8 +82,9 @@ def systemPreCheck(system, gpfs):
     print("\nChecking if the correct GPFS tar file is in /tmp... -> ", end="")
     system.sendline('find /tmp -maxdepth 1 -name GPFS-%s-*' %gpfs)
     system.prompt()
-    findTarFileOutput = system.before.split("\n")[1:]
-    findTarFileOutput = [entry for entry in findTarFileOutput if entry]
+
+    findTarFileOutput = system.before.splitlines()[1:]
+
     if findTarFileOutput:
         print("OK")
         for file in findTarFileOutput:
@@ -95,8 +97,7 @@ def systemPreCheck(system, gpfs):
     print("\nChecking if there is cs_gpfs_ls_check script in /tmp... -> ", end="")
     system.sendline('find /tmp -maxdepth 1 -name cs_gpfs_ls_check')
     system.prompt()
-    findCSCheckOutput = system.before.split("\n")[1:]
-    findCSCheckOutput = [entry for entry in findCSCheckOutput if entry]
+    findCSCheckOutput = system.before.splitlines()[1:]
 
     if findCSCheckOutput:
         print("OK")
@@ -112,15 +113,15 @@ def checkCurrentGPFSVersion(system):
     print("\nChecking currently installed GPFS version...")
     system.sendline("mmdsh 'mmfsadm dump version | grep Build'")
     system.prompt()
-    checkGPFSVersionOutput = system.before.split("\n")[1:]
+    checkGPFSVersionOutput = system.before.splitlines()[1:]
     # mmfsadm dump version | grep Build | awk -F \" '{print $2}' | sed 's/ /_/g'
-    checkGPFSVersionOutput = [entry for entry in checkGPFSVersionOutput if entry]
 
     for node in checkGPFSVersionOutput:
         print(node)
 
 
 def checkIfFileExists(system):
+    #TODO: fill this function
     pass
 
 
@@ -282,9 +283,9 @@ def distributeGPFSTarFile(system, targetNode, installDir, tarName, nodeList):
     findDistributedTarOutput = system.before.splitlines()[2:]
 
     if len(findDistributedTarOutput) == len(nodeList):
-            print("OK")
-            for node in findDistributedTarOutput:
-                print("GPFS tar copied to " + node)
+        print("OK")
+        for node in findDistributedTarOutput:
+            print("GPFS tar copied to " + node)
     else:
         if not findDistributedTarOutput:
             print("FAIL\nERROR: Can't find copied GPFS tar on any node. Check it manually.")
@@ -295,24 +296,73 @@ def distributeGPFSTarFile(system, targetNode, installDir, tarName, nodeList):
         print("\nThe full list of nodes: " + str(nodeList))
         sys.exit()
 
+def unpackGPFSTar(system, installDir, tarName):
+    print("\nUnpacking GPFS tar file on all nodes... -> ", end='')
+    system.sendline('mmdsh "cd %s; tar xfz %s | sort"' % (installDir, tarName))
+    system.prompt()
+
+    tarOutput = system.before.splitlines()[2:]
+
+    if not tarOutput:
+        print("OK")
+    else:
+        print("FAIL")
+        for line in tarOutput:
+            print("ERROR: " + line)
+        sys.exit()
+
+def stoppingCSandGPFS(system):
+    print("\nStopping CS & GPFS on all nodes: ")
+    system.sendline('vtcon stop')
+    system.prompt(timeout=60)
+
+    vtconStopOutput = system.before.splitlines()[1:]
+
+    if not vtconStopOutput:
+        system.sendline('vtinfo')
+        system.prompt()
+        vtinfoOutput = system.before.splitlines()[5:]
+        if not vtinfoOutput:
+            print("OK : CS and GPFS on all nodes are stopped")
+        else:
+            print("ERROR : Some processes are still running:")
+            for line in vtinfoOutput:
+                print(line)
+            sys.exit()
+    else:
+        print("FAIL")
+        for line in vtconStopOutput:
+            print("ERROR: " + line)
+        sys.exit()
+
 if __name__ == "__main__":
 
     host, user, password, gpfsVersion = checkArguments()
 
     try:
         cs = pxssh.pxssh()
+        fout = file('/tmp/gpfs_autoinstall.log', 'w')
+        cs.logfile = fout
+
         print("\n\nSSH-ing to ETERNUS CS (%s)..." % host)
         cs.login(host,user,password)
         gpfsTarFileName  = systemPreCheck(cs, gpfsVersion)
         targetNode = getMainNodeName(cs)
         checkCurrentGPFSVersion(cs)
+        # TODO: Add question "Do you really want to install GPFS version + gpfsVersion"
         nodesList = checkIfNodesAreActive(cs)
         #disableTraces(cs)
         #saveMmlsxxOutput(cs)
-        installDirPath = createInstallDir(cs, gpfsVersion)
+        #installDirPath = createInstallDir(cs, gpfsVersion)
+        installDirPath = "/tmp/GPFS.3.5.0.19"
         copyGPFSTarFile(cs,gpfsTarFileName,installDirPath, targetNode)
+
         if len(nodesList) != 1:
             distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
+
+        unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
+
+        stoppingCSandGPFS(cs)
 
         print("\n===== THE END ======\n")
 
