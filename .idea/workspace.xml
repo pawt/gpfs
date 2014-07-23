@@ -28,10 +28,17 @@
       <file leaf-file-name="main.py" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.42214912" vertical-offset="6687" max-vertical-offset="7616">
-              <caret line="416" column="8" selection-start-line="416" selection-start-column="8" selection-end-line="416" selection-end-column="8" />
+            <state vertical-scroll-proportion="0.5675057" vertical-offset="3125" max-vertical-offset="6120">
+              <caret line="346" column="18" selection-start-line="346" selection-start-column="18" selection-end-line="346" selection-end-column="18" />
               <folding>
                 <element signature="e#257#294#0" expanded="true" />
+                <element signature="e#5108#5989#0" expanded="false" />
+                <element signature="e#6026#6954#0" expanded="false" />
+                <element signature="e#6997#7977#0" expanded="false" />
+                <element signature="e#8046#8796#0" expanded="false" />
+                <element signature="e#8881#9889#0" expanded="false" />
+                <element signature="e#9943#10314#0" expanded="false" />
+                <element signature="e#11123#12202#0" expanded="false" />
               </folding>
             </state>
           </provider>
@@ -325,7 +332,7 @@
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
-      <option name="time" value="4" />
+      <option name="time" value="5" />
     </breakpoint-manager>
   </component>
   <component name="editorHistoryManager">
@@ -339,10 +346,17 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.42214912" vertical-offset="6687" max-vertical-offset="7616">
-          <caret line="416" column="8" selection-start-line="416" selection-start-column="8" selection-end-line="416" selection-end-column="8" />
+        <state vertical-scroll-proportion="0.5675057" vertical-offset="3125" max-vertical-offset="6120">
+          <caret line="346" column="18" selection-start-line="346" selection-start-column="18" selection-end-line="346" selection-end-column="18" />
           <folding>
             <element signature="e#257#294#0" expanded="true" />
+            <element signature="e#5108#5989#0" expanded="false" />
+            <element signature="e#6026#6954#0" expanded="false" />
+            <element signature="e#6997#7977#0" expanded="false" />
+            <element signature="e#8046#8796#0" expanded="false" />
+            <element signature="e#8881#9889#0" expanded="false" />
+            <element signature="e#9943#10314#0" expanded="false" />
+            <element signature="e#11123#12202#0" expanded="false" />
           </folding>
         </state>
       </provider>
