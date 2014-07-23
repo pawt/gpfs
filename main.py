@@ -39,6 +39,18 @@ def getMainNodeName(system):
 
     return mainNodeName
 
+def extractNodeTypes(fullNodesList):
+    icpList = []
+    idpList = []
+
+    for node in fullNodesList:
+        print(node)
+        if re.search(r'ICP[\d]+', node, re.IGNORECASE):
+            icpList.append(node)
+        elif re.search(r'IDP[\d]+', node, re.IGNORECASE):
+            idpList.append(node)
+
+    return icpList, idpList
 
 def checkArguments():
     ######################################################################
@@ -149,10 +161,14 @@ def checkIfNodesAreActive(system):
         print("\nERROR: " + str(error))
 
     # TODO: sprawdzic negatywny scenariusz, gdy jeden node nie jest active
+    # TODO: co jesli node state jest "uknown"? (KAUZ)
+
     for nodeState in activeNodeList:
         if not nodeState:
             print("FAIL!\nERROR: One or more nodes are not active.")
-            sys.exit(activeNodeList)
+            for line in mmgetstateOutput:
+                print(line)
+            sys.exit()
         else:
             print(nodeState + " : " + "OK")
 
@@ -311,10 +327,10 @@ def unpackGPFSTar(system, installDir, tarName):
             print("ERROR: " + line)
         sys.exit()
 
-def stoppingCSandGPFS(system):
-    print("\nStopping CS & GPFS on all nodes: ")
+def stoppingCSProcesses(system):
+    print("\nStopping CS processes on all nodes: ")
     system.sendline('vtcon stop')
-    system.prompt(timeout=60)
+    system.prompt(timeout=60) # vtcon stop command needs longer timeout
 
     vtconStopOutput = system.before.splitlines()[1:]
 
@@ -323,7 +339,7 @@ def stoppingCSandGPFS(system):
         system.prompt()
         vtinfoOutput = system.before.splitlines()[5:]
         if not vtinfoOutput:
-            print("OK : CS and GPFS on all nodes are stopped")
+            print("OK : CS processes on all nodes are stopped")
         else:
             print("ERROR : Some processes are still running:")
             for line in vtinfoOutput:
@@ -333,6 +349,52 @@ def stoppingCSandGPFS(system):
         print("FAIL")
         for line in vtconStopOutput:
             print("ERROR: " + line)
+        sys.exit()
+
+def stoppingHSMDaemons(system):
+
+    #TODO: this procedure should be tested in negative scenario
+
+    print("\nChecking if there are any HSM daemons running...")
+    system.sendline('mmdsh "ps -ef| grep dsm|grep -v grep|grep -v sss | sort"')
+    system.prompt()
+    grepDsmOutput = system.before.splitlines()[1:]
+
+    if grepDsmOutput:
+        print("There are some HSM daemons that need to be stopped:")
+        for line in grepDsmOutput:
+            print(line)
+
+        userDecision = raw_input("\nDo you want to stop all these HSM daemons? [y/n]:")
+        if userDecision in ["y", "Y", "yes", "Yes"]:
+            print("\nStopping HSM daemons...")
+            #TODO: this part has not been tested (use KAUZI?)
+            system.sendline('mmdsh "dsmmigfs stop"')
+            system.prompt(timeout=60)
+            dsmmigfsOutput = system.before.splitlines()[1:]
+            #TODO: IMPORTANT: depending on the output of dsmmigfs top command - do something
+        else:
+            sys.exit("## Script has been aborted by the user. ##")
+    else:
+        print("OK : There are no HSM daemons running on any node.")
+
+def unmountInstall2000(system):
+    print("\nUnmounting directory /install2000...")
+
+    system.sendline('mmdsh "instfs stop"')
+    system.prompt()
+
+    system.sendline('mmdsh "less /proc/mounts | grep install2000"')
+    system.prompt()
+
+    grepInstall2000Output = system.before.splitlines()[1:]
+
+    if not grepInstall2000Output:
+        print("OK : /install2000 unmounted.")
+    else:
+        print("FAIL: /install2000 is still mounted.")
+        for line in grepInstall2000Output:
+            print(line)
         sys.exit()
 
 if __name__ == "__main__":
@@ -349,19 +411,29 @@ if __name__ == "__main__":
         gpfsTarFileName  = systemPreCheck(cs, gpfsVersion)
         targetNode = getMainNodeName(cs)
         checkCurrentGPFSVersion(cs)
-        # TODO: Add question "Do you really want to install GPFS version + gpfsVersion"
-        nodesList = checkIfNodesAreActive(cs)
-        #disableTraces(cs)
-        #saveMmlsxxOutput(cs)
-        #installDirPath = createInstallDir(cs, gpfsVersion)
-        installDirPath = "/tmp/GPFS.3.5.0.19"
-        copyGPFSTarFile(cs,gpfsTarFileName,installDirPath, targetNode)
 
-        if len(nodesList) != 1:
-            distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
+        userAnswer = raw_input("\nDo you really want to install GPFS %s? [y/n] " % gpfsVersion)
 
-        unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
-        stoppingCSandGPFS(cs)
+        if userAnswer in ["y", "Y", "yes", "Yes"]:
+            nodesList = checkIfNodesAreActive(cs)
+            icpList, idpList = extractNodeTypes(nodesList)
+            #disableTraces(cs)
+            #saveMmlsxxOutput(cs)
+            #installDirPath = createInstallDir(cs, gpfsVersion)
+            installDirPath = "/tmp/GPFS.3.5.0.19"
+            copyGPFSTarFile(cs,gpfsTarFileName,installDirPath,targetNode)
+
+            if len(nodesList) != 1:
+                distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
+
+            unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
+            stoppingCSProcesses(cs)
+            stoppingHSMDaemons(cs)
+            #unmountInstall2000(cs)'''
+
+        else:
+            sys.exit("## Script has been aborted by the user. ##")
+
         print("\n===== THE END ======\n")
 
     except pxssh.ExceptionPxssh, error:
