@@ -37,7 +37,7 @@ def getMainNodeName(system):
     # removing newline chars
     mainNodeName = re.sub('\n|\r', '', system.before.split("\n")[1])
 
-    return mainNodeName
+    return mainNodeName.lower()
 
 def extractNodeTypes(fullNodesList):
     icpList = []
@@ -175,7 +175,7 @@ def checkIfNodesAreActive(system):
         else:
             print(nodeState + " : " + "OK")
 
-    return activeNodeList.keys() # returns the list of all nodes names
+    return [node.lower() for node in activeNodeList.keys()] # returns the list of all nodes names
 
 
 def disableTraces(system):
@@ -428,7 +428,7 @@ def unmountingFileSystems(system):
     else:
         print("FAIL : Can't unmount all file systems on some nodes:  ")
         for line in mmumountOutput:
-            print(line)#
+            print(line)
         sys.exit()
 
 def unloadKernelModules(system):
@@ -472,8 +472,6 @@ def installGPFSOnTargetNode(system, targetNode, installDirPath):
 
     print("\nPlease check if the correct packages have been installed.")
 
-    #userAnswer = raw_input("Do you want to continue with installation on the rest of the nodes? [y/n]")
-
 def compileCompatibilityLayerOnTargetNode(system, targetNode):
 
     print("\nCompiling compatibility layer on the main node (%s)..." % targetNode)
@@ -486,14 +484,55 @@ def compileCompatibilityLayerOnTargetNode(system, targetNode):
     if exportCmdResult[-1] == "0":
         print("OK: Compilation completed successfully.")
     else:
-        print("FAIL : Result code is <> 0, compilation failed. "
-              "See /tmp/gpfs_autoinstall.log for details.")
+        print("FAIL : Compilation failed. See /tmp/gpfs_autoinstall.log for details.\n")
         sys.exit()
+
+
+def checkFilesAfterCompilation(system):
+
+    allFilesExist = True
+
+    print("\nChecking if the proper files have been created after compilation...")
+    commandsToBeChecked = ["ls -l /usr/lppss/mmfs/bin/lxtrace-`uname -r`",
+                           "ls -l /usr/lpp/mmfs/bin/kdump-`uname -r`",
+                           "ls -l /lib/moduless/`uname -r`/extra/mmfs26.ko",
+                           "ls -l /lib/modules/`uname -r`/extra/mmfslinux.ko",
+                           "ls -l /lib/modulesss/`uname -r`/extra/tracedev.ko"]
+
+    for cmd in commandsToBeChecked:
+        system.sendline(cmd + "; echo $?")
+        system.prompt()
+        cmdOutput = system.before.splitlines()[1:]
+        if cmdOutput[-1] == "0":
+            print("OK : " + cmdOutput[0])
+        else:
+            print("FAIL : " + cmdOutput[0])
+            allFilesExist = False
+
+    if not allFilesExist:
+        sys.exit("\nFAIL : Can't find some mandatory files (see above). Aborting.\n")
+
+
+def installGPFSOnAllNodes(system, targetNode, nodesList):
+
+    nodesWithoutTargetNode = [nodeName for nodeName in nodesList if nodeName != targetNode ]
+
+    print("\nPreparing the GPFS installation on the rest of the nodes: ")
+    for node in nodesWithoutTargetNode:
+        print(node, end=" ")
+
+    time.sleep(3)
+
+    # userAnswer = raw_input("\n\nDo you want to continue with installation on the rest of the nodes? [y/n] ")
+
+    #TODO: system.sendline("mmdsh -N %s 'rpm -Uhv %s/*.rpm'" % (nodes, installDirPath)
 
 
 if __name__ == "__main__":
 
     host, user, password, gpfsVersion = checkArguments()
+
+    oneNodeSystem = True
 
     try:
         cs = pxssh.pxssh()
@@ -504,13 +543,19 @@ if __name__ == "__main__":
         cs.login(host,user,password)
         gpfsTarFileName  = systemPreCheck(cs, gpfsVersion)
         targetNode = getMainNodeName(cs)
+        nodesList = checkIfNodesAreActive(cs)
         #checkCurrentGPFSVersion(cs)
+        installGPFSOnAllNodes(cs, targetNode, nodesList)
 
         userAnswer = raw_input("\nDo you really want to install a new GPFS %s? [y/n] " % gpfsVersion)
 
         if userAnswer in ["y", "Y", "yes", "Yes"]:
             #nodesList = checkIfNodesAreActive(cs)
             nodesList = ["VTC"]
+
+            if len(nodesList) != 1:
+                oneNodeSystem = False
+
             icpList, idpList = extractNodeTypes(nodesList)
             #disableTraces(cs)
             #saveMmlsxxOutput(cs)
@@ -518,7 +563,7 @@ if __name__ == "__main__":
             installDirPath = "/tmp/GPFS.3.5.0.19"
             copyGPFSTarFile(cs,gpfsTarFileName,installDirPath,targetNode)
 
-            if len(nodesList) != 1:
+            if not oneNodeSystem:
                 distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
 
             unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
@@ -528,11 +573,15 @@ if __name__ == "__main__":
             #stoppingNfsServer(cs)
             #unmountingFileSystems(cs)
             #unloadKernelModules(cs)
-            installGPFSOnTargetNode(cs, targetNode, installDirPath)
-            compileCompatibilityLayerOnTargetNode(cs, targetNode)l
+            #installGPFSOnTargetNode(cs, targetNode, installDirPath)
+            #compileCompatibilityLayerOnTargetNode(cs, targetNode)
+            checkFilesAfterCompilation(cs)
+
+        #    if not oneNodeSystem:
+        #       installGPFSOnAllNodes(cs, targetNode, nodesList)
 
         else:
-            sys.exit("## Script has been aborted by the user. ##")
+            sys.exit("\n## Script has been aborted by the user. ##\n")
 
         print("\n@-}---- THE END @-}----\n")
 
