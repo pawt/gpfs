@@ -28,17 +28,18 @@
       <file leaf-file-name="main.py" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.5675057" vertical-offset="3125" max-vertical-offset="6120">
-              <caret line="346" column="18" selection-start-line="346" selection-start-column="18" selection-end-line="346" selection-end-column="18" />
+            <state vertical-scroll-proportion="0.4516129" vertical-offset="5357" max-vertical-offset="6358">
+              <caret line="513" column="43" selection-start-line="513" selection-start-column="43" selection-end-line="513" selection-end-column="43" />
               <folding>
                 <element signature="e#257#294#0" expanded="true" />
-                <element signature="e#5108#5989#0" expanded="false" />
-                <element signature="e#6026#6954#0" expanded="false" />
-                <element signature="e#6997#7977#0" expanded="false" />
-                <element signature="e#8046#8796#0" expanded="false" />
-                <element signature="e#8881#9889#0" expanded="false" />
-                <element signature="e#9943#10314#0" expanded="false" />
-                <element signature="e#11123#12202#0" expanded="false" />
+                <element signature="e#5334#6215#0" expanded="false" />
+                <element signature="e#6252#7180#0" expanded="false" />
+                <element signature="e#7223#8203#0" expanded="false" />
+                <element signature="e#8272#8943#0" expanded="false" />
+                <element signature="e#9028#9997#0" expanded="false" />
+                <element signature="e#10052#10449#0" expanded="false" />
+                <element signature="e#10489#11219#0" expanded="false" />
+                <element signature="e#11259#12338#0" expanded="false" />
               </folding>
             </state>
           </provider>
@@ -332,7 +333,7 @@
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
-      <option name="time" value="5" />
+      <option name="time" value="7" />
     </breakpoint-manager>
   </component>
   <component name="editorHistoryManager">
@@ -346,17 +347,18 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.5675057" vertical-offset="3125" max-vertical-offset="6120">
-          <caret line="346" column="18" selection-start-line="346" selection-start-column="18" selection-end-line="346" selection-end-column="18" />
+        <state vertical-scroll-proportion="0.4516129" vertical-offset="5357" max-vertical-offset="6358">
+          <caret line="513" column="43" selection-start-line="513" selection-start-column="43" selection-end-line="513" selection-end-column="43" />
           <folding>
             <element signature="e#257#294#0" expanded="true" />
-            <element signature="e#5108#5989#0" expanded="false" />
-            <element signature="e#6026#6954#0" expanded="false" />
-            <element signature="e#6997#7977#0" expanded="false" />
-            <element signature="e#8046#8796#0" expanded="false" />
-            <element signature="e#8881#9889#0" expanded="false" />
-            <element signature="e#9943#10314#0" expanded="false" />
-            <element signature="e#11123#12202#0" expanded="false" />
+            <element signature="e#5334#6215#0" expanded="false" />
+            <element signature="e#6252#7180#0" expanded="false" />
+            <element signature="e#7223#8203#0" expanded="false" />
+            <element signature="e#8272#8943#0" expanded="false" />
+            <element signature="e#9028#9997#0" expanded="false" />
+            <element signature="e#10052#10449#0" expanded="false" />
+            <element signature="e#10489#11219#0" expanded="false" />
+            <element signature="e#11259#12338#0" expanded="false" />
           </folding>
         </state>
       </provider>
