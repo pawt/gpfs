@@ -17,10 +17,46 @@ import time
 import getopt
 import getpass
 import pxssh
+import pexpect
+
+#TODO: add name of the log_file as a global constant LOG_FILE_PATH
 
 def exit_with_usage():
     print(globals()['__doc__'])
     sys.exit()
+
+
+def query_yes_no(question, default=None):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is one of "yes" or "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
 def getGpfsTarName(gpfsTarPath):
@@ -34,10 +70,8 @@ def getMainNodeName(system):
     system.sendline('hostname')
     system.prompt()
 
-    # removing newline chars
-    mainNodeName = re.sub('\n|\r', '', system.before.split("\n")[1])
+    return system.before.splitlines()[1].lower()
 
-    return mainNodeName.lower()
 
 def extractNodeTypes(fullNodesList):
     icpList = []
@@ -51,20 +85,23 @@ def extractNodeTypes(fullNodesList):
 
     return icpList, idpList
 
+
 def checkArguments():
     ######################################################################
-    ## Parse the options, arguments, get ready, etc.
+    ## Parse the options, arguments, get ready
     ######################################################################
     try:
-        optlist, args = getopt.getopt(sys.argv[1:], 'h?s:u:p:g:', ['help','h','?'])
+        optlist, args = getopt.getopt(sys.argv[1:], 'h?s:u:p:g:', ['help', 'h', '?'])
     except Exception as e:
         print(str(e))
         exit_with_usage()
+
     options = dict(optlist)
+
     if len(args) > 1:
         exit_with_usage()
 
-    if [elem for elem in options if elem in ['-h','--h','-?','--?','--help']]:
+    if [elem for elem in options if elem in ['-h', '--h', '-?', '--?', '--help']]:
         print("Help:")
         exit_with_usage()
 
@@ -90,44 +127,41 @@ def checkArguments():
 
 
 def systemPreCheck(system, gpfs):
-    print("\nChecking if the correct GPFS tar file is in /tmp... -> ", end="")
-    system.sendline('find /tmp -maxdepth 1 -name GPFS-%s-*' %gpfs)
+    print("\nChecking if the correct GPFS tar file is in /tmp...")
+    system.sendline('find /tmp -maxdepth 1 -name GPFS-%s-*' % gpfs)
     system.prompt()
 
     findTarFileOutput = system.before.splitlines()[1:]
 
     if findTarFileOutput:
-        print("OK")
         for file in findTarFileOutput:
-            print("GPFS tar file has been found: " + file)
+            print("OK : GPFS tar file has been found: " + file)
             gpfsTarName = getGpfsTarName(file)
     else:
-        print("FAIL")
-        sys.exit("ERROR: Can't find GPFS tar (for version: %s) in /tmp. Check it manually." % gpfs)
+        sys.exit("FAIL : Can't find GPFS tar (for version: %s) in /tmp. Check it manually." % gpfs)
 
-    print("\nChecking if there is cs_gpfs_ls_check script in /tmp... -> ", end="")
+    print("\nChecking if there is cs_gpfs_ls_check script in /tmp...")
     system.sendline('find /tmp -maxdepth 1 -name cs_gpfs_ls_check')
     system.prompt()
     findCSCheckOutput = system.before.splitlines()[1:]
 
     if findCSCheckOutput:
-        print("OK")
         for file in findCSCheckOutput:
-            print("Script cs_gpfs_ls_check has been found: " + file)
+            print("OK : Script cs_gpfs_ls_check has been found: " + file)
     else:
-        print("FAIL")
-        sys.exit("ERROR: Can't find cs_gpfs_ls_check in /tmp. Check it manually & correct it.")
+        sys.exit("FAIL : Can't find cs_gpfs_ls_check in /tmp. Check it manually & correct it.")
 
     return gpfsTarName
 
+
 def checkCurrentGPFSVersion(system):
     print("\nChecking currently installed GPFS version...")
-    #system.sendline("mmdsh 'mmfsadm dump version | grep Build'")
+    # system.sendline("mmdsh 'mmfsadm dump version | grep Build'")
     system.sendline('mmfsadm dump version | grep Build | awk -F \\" \'{print $2}\' | sed \'s/ /_/g\'')
     system.prompt()
     checkGPFSVersionOutput = system.before.splitlines()[2:]
 
-    if re.search(r'[\d\.\_]+', checkGPFSVersionOutput[0]):
+    if re.search(r'[\d._]+', checkGPFSVersionOutput[0]):
         print("Current GPFS version: " + checkGPFSVersionOutput[0])
     else:
         print("FAIL:")
@@ -137,7 +171,7 @@ def checkCurrentGPFSVersion(system):
 
 
 def checkIfFileExists(system):
-    #TODO: fill this function
+    # TODO: fill this function
     pass
 
 
@@ -151,7 +185,6 @@ def checkIfNodesAreActive(system):
     # TODO: jak lepiej sprasowac ten output komendy mmgetstate -a ?
     mmgetstateOutput = system.before.splitlines()[4:]
 
-    # TODO: uzyc tego splitlines w pozostalych przypadkach
     try:
         for line in mmgetstateOutput:
             if line.split()[2] == 'active':
@@ -171,11 +204,11 @@ def checkIfNodesAreActive(system):
             print("FAIL : GPFS on one or more nodes is not active:")
             for line in mmgetstateOutput:
                 print(line)
-            sys.exit()
+            #sys.exit()
         else:
             print(nodeState + " : " + "OK")
 
-    return [node.lower() for node in activeNodeList.keys()] # returns the list of all nodes names
+    return [node.lower() for node in activeNodeList.keys()]  # returns the list of all nodes names
 
 
 def disableTraces(system):
@@ -187,12 +220,12 @@ def disableTraces(system):
     mmTraceCtlOutput = system.before.splitlines()[1:]
 
     if mmTraceCtlOutput[0] == expectedAnswer:
-        system.sendline('mmdsh "ps -ef|grep lxtrace|grep -v grep| grep -v ssh|sort"')
+        system.sendline('mmdsh "ps -ef|grep lxtrace|grep -v grep| grep -v ssh"| sort')
         system.prompt()
         tmpCmdOutput = system.before.splitlines()[1:]
         # if there is no answer it's OK
         if not tmpCmdOutput:
-            print("OK : Traces have been disabled.")
+            print("OK : Traces disabled.")
         else:
             print("FAIL\nERROR : Some traces are still active")
             for line in tmpCmdOutput:
@@ -207,14 +240,14 @@ def disableTraces(system):
 
 def saveMmlsxxOutput(system):
     print("\nExecuting cs_gpfs_ls_check script...")
-    system.sendline("cd /tmp; ./cs_gpfs_ls_check")
+    system.sendline("chmod 722 /tmp/cs_gpfs_ls_check; cd /tmp; ./cs_gpfs_ls_check")
     system.prompt(timeout=30)
 
     cmdOutput = system.before.splitlines()[1:]
 
     try:
         if re.search(r'mmcheck[\.\d]+_ saved\.', cmdOutput[0]):
-            print("OK : cs_gpfs_ls_check executed.")
+            print("OK : cs_gpfs_]ls_check executed.")
             print("\nChecking if a file with mmlsxx commands has been created...")
             system.sendline("find /tmp -name mmcheck.*_")
             system.prompt()
@@ -222,9 +255,12 @@ def saveMmlsxxOutput(system):
             if findMmcheckOutput[0]:
                 print("OK : Mmmlsxx commands saved: " + findMmcheckOutput[0])
             else:
-                sys.exit("FAIL\nERROR : Expected file (mmcheck*) has not been created.")
+                sys.exit("FAIL : Expected file (mmcheck*) has not been created.")
         else:
-            sys.exit("FAIL\nERROR : cs_gpfs_ls_check has not been executed properly.")
+            print("FAIL : Something went wrong with running cs_gpfs_ls_check:")
+            for line in cmdOutput:
+                print(line)
+            sys.exit()
     except IndexError, error:
         print("\nERROR: " + str(error))
 
@@ -235,8 +271,6 @@ def createInstallDir(system, gpfs):
     system.prompt()
 
     mkdirOutput = system.before.splitlines()[1:]
-
-    # TODO: dopracowac sprawdzanie czy ten katalog pojawil sie na wszystkich node'ach
 
     if not mkdirOutput:
         system.sendline('mmdsh "find /tmp -name GPFS.%s"' % gpfs)
@@ -251,7 +285,6 @@ def createInstallDir(system, gpfs):
                 print("Install dir created on " + node)
             return installDirPath
         else:
-            print("FAIL")
             for line in findGpfsDirOutput:
                 print("ERROR: " + line)
             sys.exit()
@@ -285,13 +318,11 @@ def copyGPFSTarFile(system, tarName, installDir, targetNode):
 
 def distributeGPFSTarFile(system, targetNode, installDir, tarName, nodeList):
     print("\nCopying tar file to all nodes...")
-    system.sendline('mmdsh "scp -p {0}:{1}/{2} {1}/. |sort"'.format(targetNode, installDir, tarName))
+    system.sendline('mmdsh "scp -p {0}:{1}/{2} {1}/. "| sort'.format(targetNode, installDir, tarName))
     system.prompt()
 
     system.sendline('mmdsh "find {0} -name {1}"'.format(installDir, tarName))
     system.prompt()
-
-    # TODO: dopracowac sprawdzanie czy ten plik pojawil sie na wszystkich node'ach?
 
     findDistributedTarOutput = system.before.splitlines()[2:]
 
@@ -311,7 +342,7 @@ def distributeGPFSTarFile(system, targetNode, installDir, tarName, nodeList):
 
 def unpackGPFSTar(system, installDir, tarName):
     print("\nUnpacking GPFS tar file on all nodes...")
-    system.sendline('mmdsh "cd %s; tar xfz %s | sort"' % (installDir, tarName))
+    system.sendline('mmdsh "cd %s; tar xfz %s"| sort' % (installDir, tarName))
     system.prompt()
 
     tarOutput = system.before.splitlines()[2:]
@@ -327,7 +358,7 @@ def unpackGPFSTar(system, installDir, tarName):
 def stoppingCSProcesses(system):
     print("\nStopping CS processes on all nodes:")
     system.sendline('vtcon stop')
-    system.prompt(timeout=60) # vtcon stop command needs longer timeout
+    system.prompt(timeout=60)  # vtcon stop command needs longer timeout
 
     vtconStopOutput = system.before.splitlines()[1:]
 
@@ -350,10 +381,9 @@ def stoppingCSProcesses(system):
 
 
 def stoppingHSMDaemons(system):
-
-    #TODO: this procedure should be tested in negative scenario
+    # TODO: this procedure should be tested in negative scenario
     print("\nChecking if there are any HSM daemons running...")
-    system.sendline('mmdsh "ps -ef| grep dsm|grep -v grep|grep -v sss | sort"')
+    system.sendline('mmdsh "ps -ef| grep dsm|grep -v grep|grep -v ssh"| sort')
     system.prompt()
     grepDsmOutput = system.before.splitlines()[1:]
 
@@ -362,14 +392,15 @@ def stoppingHSMDaemons(system):
         for line in grepDsmOutput:
             print(line)
 
-        userDecision = raw_input("\nDo you want to stop all these HSM daemons? [y/n]:")
-        if userDecision in ["y", "Y", "yes", "Yes"]:
+        userDecision = query_yes_no("\nDo you want to stop all these HSM daemons?")
+
+        if userDecision:
             print("\nStopping HSM daemons...")
-            #TODO: this part has not been tested (use KAUZI?)
+            # TODO: this part has not been tested (use KAUZI?)
             system.sendline('mmdsh "dsmmigfs stop"')
             system.prompt(timeout=60)
             dsmmigfsOutput = system.before.splitlines()[1:]
-            #TODO: IMPORTANT: depending on the output of dsmmigfs top command - do something
+            # TODO: IMPORTANT: depending on the output of dsmmigfs top command - do something
         else:
             sys.exit("## Script has been aborted by the user. ##")
     else:
@@ -379,11 +410,11 @@ def stoppingHSMDaemons(system):
 def unmountingInstall2000(system):
     print("\nUnmounting directory /install2000...")
 
-    #unmounting /install2000 on all nodes
+    # unmounting /install2000 on all nodes
     system.sendline('mmdsh "instfs stop"')
     system.prompt()
 
-    #confirming that /install2000 has been unmounted on all nodes
+    # confirming that /install2000 has been unmounted on all nodes
     system.sendline('mmdsh "less /proc/mounts | grep install2000"')
     system.prompt()
 
@@ -397,11 +428,12 @@ def unmountingInstall2000(system):
             print(line)
         sys.exit()
 
+
 def stoppingNfsServer(system):
-    #TODO: needs to be tested on multiNode system
+    # TODO: needs to be tested on multiNode system
     print("\nStopping nfsserver on all nodes...")
 
-    #stopping nfsserver on all nodes
+    # stopping nfsserver on all nodes
     system.sendline('mmdsh "/etc/init.d/nfsserver stop"')
     system.prompt()
 
@@ -410,14 +442,15 @@ def stoppingNfsServer(system):
     for line in stopNfsserverOutput:
         print(line)
 
+
 def unmountingFileSystems(system):
-    #TODO: needs to be tested on multiNode system
+    # TODO: needs to be tested on multiNode system
     print("\nUnmounting file systems on all nodes...")
     system.sendline('mmumount all -a')
     system.prompt()
     mmumountOutput = system.before.splitlines()[1:]
 
-    #confirming that all file systems have been unmounted
+    # confirming that all file systems have been unmounted
     system.sendline('mmdsh "less /proc/mounts | grep gpfs"')
     system.prompt()
 
@@ -431,8 +464,9 @@ def unmountingFileSystems(system):
             print(line)
         sys.exit()
 
+
 def unloadKernelModules(system):
-    #TODO: needs to be tested on multiNode system
+    # TODO: needs to be tested on multiNode system
     unloadSuccessful = True
 
     print("\nUnloading all kernel modules on all nodes...")
@@ -441,9 +475,9 @@ def unloadKernelModules(system):
 
     cafsStopOutput = system.before.splitlines()[1:]
 
-    #checking if output of cafs_stop command has some errors/problems with unloading
+    # checking if output of cafs_stop command has some errors/problems with unloading
     for line in cafsStopOutput:
-        if re.search(r'ERROR', line) or re.search(r'busy', line) :
+        if re.search(r'ERROR', line) or re.search(r'busy', line):
             unloadSuccessful = False
             print("\nFAIL : Cafs_stop -a has some problems with unloading:\n")
             for line in cafsStopOutput:
@@ -453,8 +487,8 @@ def unloadKernelModules(system):
     if unloadSuccessful:
         print("OK : Kernel modules unloaded successfully.")
 
-def installGPFSOnTargetNode(system, targetNode, installDirPath):
 
+def installGPFSOnTargetNode(system, targetNode, installDirPath):
     print("\nInstalling a new GPFS on the main node (%s)..." % targetNode)
     system.sendline('rpm -Uhv %s/*.rpm' % installDirPath)
     system.prompt()
@@ -472,8 +506,8 @@ def installGPFSOnTargetNode(system, targetNode, installDirPath):
 
     print("\nPlease check if the correct packages have been installed.")
 
-def compileCompatibilityLayerOnTargetNode(system, targetNode):
 
+def compileCompatibillityLayerOnTargetNode(system, targetNode):
     print("\nCompiling compatibility layer on the main node (%s)..." % targetNode)
     system.sendline('export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
                     cd /usr/lpp/mmfs/src; make Autoconfig; make World; make InstallImages;echo $?')
@@ -488,19 +522,18 @@ def compileCompatibilityLayerOnTargetNode(system, targetNode):
         sys.exit()
 
 
-def checkFilesAfterCompilation(system):
-
+def checkFilesAfterCompilationOnTargetNode(system):
     allFilesExist = True
 
     print("\nChecking if the proper files have been created after compilation...")
-    commandsToBeChecked = ["ls -l /usr/lppss/mmfs/bin/lxtrace-`uname -r`",
+    commandsToBeChecked = ["ls -l /usr/lpp/mmfs/bin/lxtrace-`uname -r`",
                            "ls -l /usr/lpp/mmfs/bin/kdump-`uname -r`",
-                           "ls -l /lib/moduless/`uname -r`/extra/mmfs26.ko",
+                           "ls -l /lib/modules/`uname -r`/extra/mmfs26.ko",
                            "ls -l /lib/modules/`uname -r`/extra/mmfslinux.ko",
-                           "ls -l /lib/modulesss/`uname -r`/extra/tracedev.ko"]
+                           "ls -l /lib/modules/`uname -r`/extra/tracedev.ko"]
 
     for cmd in commandsToBeChecked:
-        system.sendline(cmd + "; echo $?")
+        system.sendline(cmd + "| awk \'{print $1 $6, $7, $8, $9, $10}\' ; echo $?")
         system.prompt()
         cmdOutput = system.before.splitlines()[1:]
         if cmdOutput[-1] == "0":
@@ -513,19 +546,104 @@ def checkFilesAfterCompilation(system):
         sys.exit("\nFAIL : Can't find some mandatory files (see above). Aborting.\n")
 
 
-def installGPFSOnAllNodes(system, targetNode, nodesList):
+def installGPFSOnAllNodes(system, nodesList, installDirPath):
 
-    nodesWithoutTargetNode = [nodeName for nodeName in nodesList if nodeName != targetNode ]
+    nodesString = ",".join(nodesWithoutTargetNode)
+    print("\nPreparing the GPFS installation on the rest of the nodes: %s" % nodesString)
 
-    print("\nPreparing the GPFS installation on the rest of the nodes: ")
+    time.sleep(2)
+
+    userAnswer = query_yes_no("\n\nDo you want to continue with installation on the rest of the nodes?")
+
+    if userAnswer:
+        print("\nInstalling a new GPFS on the rest of the nodes...")
+        system.sendline('mmdsh -N %s "rpm -Uhv %s/*.rpm"| sort' % (nodesString, installDirPath))
+        system.prompt(timeout=60)
+        print("OK : Installation completed on nodes %s" % nodesString)
+
+        system.sendline('mmdsh "rpm -qa| grep -i gpfs"| sort')
+        system.prompt()
+
+    else:
+        sys.exit("\n## Script has been aborted by the user. ##\n")
+
+
+def compileCompatibillityLayerOnAllNodes(system, nodesWithoutTargetNode):
+
+    allNodesCompilationOK = True
+    nodesString = ",".join(nodesWithoutTargetNode)
+    print("\nCompiling compatibility layer on the nodes (%s): " % nodesString)
+
     for node in nodesWithoutTargetNode:
-        print(node, end=" ")
+        #system.sendline('mmdsh -N %s "export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
+        #                cd /usr/lpp/mmfs/src; make Autoconfig; make World; '
+        #                'make InstallImages;echo $?"' % node)
 
-    time.sleep(3)
+        system.sendline('mmdsh -N %s "ls -l"; echo $?' % node)
+        system.prompt(timeout=30)
 
-    # userAnswer = raw_input("\n\nDo you want to continue with installation on the rest of the nodes? [y/n] ")
+        exportCmdResult = system.before.splitlines()[1:]
 
-    #TODO: system.sendline("mmdsh -N %s 'rpm -Uhv %s/*.rpm'" % (nodes, installDirPath)
+        if exportCmdResult[-1] == "0":
+            print(node + ": OK")
+        else:
+            print(node + ": FAIL")
+            allNodesCompilationOK = False
+
+    if not allNodesCompilationOK:
+        sys.exit("\nFAIL : Compilation failed. See /tmp/gpfs_autoinstall.log for details.\n")
+
+
+def checkFilesAfterCompilationOnAllNodes(system, nodesWithoutTargetNode):
+    allFilesExistOnAllNodes = True
+    nodesString = ",".join(nodesWithoutTargetNode)
+
+    print("\nChecking if the proper files have been created after compilation on all nodes (%s):" % nodesString)
+    commandsToBeChecked = ["ls -l /usr/lpp/mmfs/bin/lxtrace-`uname -r`",
+                           "ls -l /usr/lpp/mmfs/bin/kdump-`uname -r`",
+                           "ls -l /lib/modules/`uname -r`/extra/mmfs26.ko",
+                           "ls -l /lib/modules/`uname -r`/extra/mmfslinux.ko",
+                           "ls -l /lib/modules/`uname -r`/extra/tracedev.ko"]
+
+    for node in nodesWithoutTargetNode:
+        for cmd in commandsToBeChecked:
+            system.sendline("mmdsh -N %s " % node + cmd + '| awk \'{print $1 $6, $7, $8, $9, $10}\'; echo \"${PIPESTATUS[0]}\"')
+            system.prompt()
+            cmdOutput = system.before.splitlines()[2:]
+            cmdResult = cmdOutput[-1]
+            if cmdResult.split()[-1] == "0":
+                print("OK : " + cmdOutput[0])
+            else:
+                print("FAIL : " + cmdOutput[0])
+                allFilesExistOnAllNodes = False
+        print("")
+
+    if not allFilesExistOnAllNodes:
+        sys.exit("FAIL : Can't find necessary files on some nodes. "
+                 "Check /tmp/gpfs_autoinstall.log for details\n")
+
+def rebootAllNodes(system):
+    print("\nRebooting all nodes...")
+
+    system.sendline('mmdsh "init 6"')
+    system.prompt()
+
+    print("OK : Reboot command sent to all nodes. "
+          "\nPlease wait till the system is up & running again.")
+
+
+def waitForServer(ipAddress):
+    # TODO: this function has not been fully implemented & tested
+
+    child = pexpect.spawn("ping -i 5 %s" % host)
+
+    while 1:
+        line = child.readline()
+        if line: break
+        print("Server is still down... Waiting another 10 seconds...")
+        time.sleep(10)
+
+    print("I'm UP and running again!")
 
 
 if __name__ == "__main__":
@@ -540,52 +658,62 @@ if __name__ == "__main__":
         cs.logfile = fout
 
         print("\n\nSSH-ing to ETERNUS CS (%s)..." % host)
-        cs.login(host,user,password)
-        gpfsTarFileName  = systemPreCheck(cs, gpfsVersion)
+        cs.login(host, user, password)
+        gpfsTarFileName = systemPreCheck(cs, gpfsVersion)
         targetNode = getMainNodeName(cs)
-        nodesList = checkIfNodesAreActive(cs)
-        #checkCurrentGPFSVersion(cs)
-        installGPFSOnAllNodes(cs, targetNode, nodesList)
+        checkCurrentGPFSVersion(cs)
 
-        userAnswer = raw_input("\nDo you really want to install a new GPFS %s? [y/n] " % gpfsVersion)
+        print("\n============================================")
+        print("GPFS version to be installed: %s" % gpfsVersion)
+        print("============================================")
 
-        if userAnswer in ["y", "Y", "yes", "Yes"]:
-            #nodesList = checkIfNodesAreActive(cs)
-            nodesList = ["VTC"]
+        userAnswer = query_yes_no("\nDo you really want to install a new GPFS?")
 
+        if userAnswer:
+            nodesList = checkIfNodesAreActive(cs)
+            nodesWithoutTargetNode = [nodeName for nodeName in nodesList if nodeName != targetNode]
             if len(nodesList) != 1:
                 oneNodeSystem = False
 
             icpList, idpList = extractNodeTypes(nodesList)
             #disableTraces(cs)
             #saveMmlsxxOutput(cs)
-            #installDirPath = createInstallDir(cs, gpfsVersion)
-            installDirPath = "/tmp/GPFS.3.5.0.19"
-            copyGPFSTarFile(cs,gpfsTarFileName,installDirPath,targetNode)
+
+
+            #compileCompatibillityLayerOnAllNodes(cs, nodesWithoutTargetNode)
+            checkFilesAfterCompilationOnAllNodes(cs, nodesWithoutTargetNode)
+
+
+            time.sleep(100)
+            installDirPath = createInstallDir(cs, gpfsVersion)
+            # installDirPath = "/tmp/GPFS.3.5.0.19"
+            copyGPFSTarFile(cs, gpfsTarFileName, installDirPath, targetNode)
 
             if not oneNodeSystem:
                 distributeGPFSTarFile(cs, targetNode, installDirPath, gpfsTarFileName, nodesList)
 
             unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
-            #stoppingCSProcesses(cs)
-            #stoppingHSMDaemons(cs)
-            #unmountingInstall2000(cs)
-            #stoppingNfsServer(cs)
-            #unmountingFileSystems(cs)
-            #unloadKernelModules(cs)
-            #installGPFSOnTargetNode(cs, targetNode, installDirPath)
-            #compileCompatibilityLayerOnTargetNode(cs, targetNode)
-            checkFilesAfterCompilation(cs)
+            stoppingCSProcesses(cs)
+            stoppingHSMDaemons(cs)
+            unmountingInstall2000(cs)
+            stoppingNfsServer(cs)
+            unmountingFileSystems(cs)
+            unloadKernelModules(cs)
+            installGPFSOnTargetNode(cs, targetNode, installDirPath)
+            compileCompatibillityLayerOnTargetNode(cs, targetNode)
+            checkFilesAfterCompilationOnTargetNode(cs)
 
-        #    if not oneNodeSystem:
-        #       installGPFSOnAllNodes(cs, targetNode, nodesList)
+            if not oneNodeSystem:
+                installGPFSOnAllNodes(cs, nodesWithoutTargetNode, installDirPath)
+                compileCompatibillityLayerOnAllNodes(cs, nodesWithoutTargetNode)
+                checkFilesAfterCompilationOnAllNodes(cs, nodesWithoutTargetNode)
+
+            rebootAllNodes(cs)
+            print("\n===== GPFS install procedure finished successfully =====")
 
         else:
             sys.exit("\n## Script has been aborted by the user. ##\n")
 
-        print("\n@-}---- THE END @-}----\n")
-
     except pxssh.ExceptionPxssh, error:
         print("## pxssh failed on login.")
         print(str(error))
-
