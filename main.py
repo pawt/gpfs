@@ -19,7 +19,9 @@ import getpass
 import pxssh
 import pexpect
 
-#TODO: add name of the log_file as a global constant LOG_FILE_PATH
+
+LOG_FILE_PATH = "/tmp/gpfs_autoinstall.log"
+
 
 def exit_with_usage():
     print(globals()['__doc__'])
@@ -90,6 +92,7 @@ def checkArguments():
     ######################################################################
     ## Parse the options, arguments, get ready
     ######################################################################
+
     try:
         optlist, args = getopt.getopt(sys.argv[1:], 'h?s:u:p:g:', ['help', 'h', '?'])
     except Exception as e:
@@ -120,8 +123,14 @@ def checkArguments():
     if '-g' in options:
         gpfsVersion = options['-g']
     else:
-        gpfsVersion = raw_input('gpfs version: ')
-        # TODO: dodac sprawdzanie regexpem czy GPFS version jest w dobrym formacie?
+        gpfsVersion = raw_input('gpfs version (e.g. 3.5.0.19): ')
+        while True:
+            if re.search(r'(\d\.){3}\d+', gpfsVersion):
+                print("GPFS format OK")
+                break
+            else:
+                print("ERROR : Incorrect GPFS version format. Reenter GPFS version you want to install.")
+                gpfsVersion = raw_input('gpfs version (e.g. 3.5.0.19): ')
 
     return host, user, password, gpfsVersion
 
@@ -169,12 +178,6 @@ def checkCurrentGPFSVersion(system):
             print(line)
         sys.exit()
 
-
-def checkIfFileExists(system):
-    # TODO: fill this function
-    pass
-
-
 def checkIfNodesAreActive(system):
     activeNodeList = {}
 
@@ -182,7 +185,6 @@ def checkIfNodesAreActive(system):
     system.sendline("mmgetstate -a")
     system.prompt()
 
-    # TODO: jak lepiej sprasowac ten output komendy mmgetstate -a ?
     mmgetstateOutput = system.before.splitlines()[4:]
 
     try:
@@ -196,15 +198,12 @@ def checkIfNodesAreActive(system):
     except IndexError, error:
         print("\nERROR: " + str(error))
 
-    # TODO: sprawdzic negatywny scenariusz, gdy jeden node nie jest active
-    # TODO: co jesli node state jest "uknown"? (KAUZ)
-
     for nodeState in activeNodeList:
         if not activeNodeList[nodeState]:
             print("FAIL : GPFS on one or more nodes is not active:")
             for line in mmgetstateOutput:
                 print(line)
-            #sys.exit()
+            sys.exit()
         else:
             print(nodeState + " : " + "OK")
 
@@ -547,8 +546,8 @@ def checkFilesAfterCompilationOnTargetNode(system):
 
 
 def installGPFSOnAllNodes(system, nodesList, installDirPath):
-
-    nodesString = ",".join(nodesWithoutTargetNode)
+    #TODO: needs to be tested on multiNode system
+    nodesString = ",".join(nodesList)
     print("\nPreparing the GPFS installation on the rest of the nodes: %s" % nodesString)
 
     time.sleep(2)
@@ -556,30 +555,32 @@ def installGPFSOnAllNodes(system, nodesList, installDirPath):
     userAnswer = query_yes_no("\n\nDo you want to continue with installation on the rest of the nodes?")
 
     if userAnswer:
-        print("\nInstalling a new GPFS on the rest of the nodes...")
-        system.sendline('mmdsh -N %s "rpm -Uhv %s/*.rpm"| sort' % (nodesString, installDirPath))
-        system.prompt(timeout=60)
-        print("OK : Installation completed on nodes %s" % nodesString)
+        for node in nodesList:
+            system.sendline('mmdsh -N %s "rpm -Uhv %s/*.rpm"' % (node, installDirPath))
+            system.prompt(timeout=20)
+            print("OK : Installation completed on node: %s" % node)
 
-        system.sendline('mmdsh "rpm -qa| grep -i gpfs"| sort')
+    print("\nChecking currently installed packages (should be updated to a new GPFS version)")
+    for node in nodesList:
+        system.sendline('mmdsh -L %s "rpm -qa| grep -i gpfs"| sort' % node)
         system.prompt()
-
+        for line in system.before.splitlines()[1:]:
+            print(line)
+        print("")
     else:
         sys.exit("\n## Script has been aborted by the user. ##\n")
 
 
-def compileCompatibillityLayerOnAllNodes(system, nodesWithoutTargetNode):
-
+def compileCompatibillityLayerOnAllNodes(system, nodesList):
+    #TODO: needs to be tested on multiNode system
     allNodesCompilationOK = True
-    nodesString = ",".join(nodesWithoutTargetNode)
+    nodesString = ",".join(nodesList)
     print("\nCompiling compatibility layer on the nodes (%s): " % nodesString)
 
-    for node in nodesWithoutTargetNode:
-        #system.sendline('mmdsh -N %s "export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
-        #                cd /usr/lpp/mmfs/src; make Autoconfig; make World; '
-        #                'make InstallImages;echo $?"' % node)
-
-        system.sendline('mmdsh -N %s "ls -l"; echo $?' % node)
+    for node in nodesList:
+        system.sendline('mmdsh -N %s "export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
+                        cd /usr/lpp/mmfs/src; make Autoconfig; make World; '
+                        'make InstallImages;echo $?"' % node)
         system.prompt(timeout=30)
 
         exportCmdResult = system.before.splitlines()[1:]
@@ -591,12 +592,12 @@ def compileCompatibillityLayerOnAllNodes(system, nodesWithoutTargetNode):
             allNodesCompilationOK = False
 
     if not allNodesCompilationOK:
-        sys.exit("\nFAIL : Compilation failed. See /tmp/gpfs_autoinstall.log for details.\n")
+        sys.exit("\nFAIL : Compilation failed. Check /tmp/gpfs_autoinstall.log for details.\n")
 
 
-def checkFilesAfterCompilationOnAllNodes(system, nodesWithoutTargetNode):
+def checkFilesAfterCompilationOnAllNodes(system, nodesList):
     allFilesExistOnAllNodes = True
-    nodesString = ",".join(nodesWithoutTargetNode)
+    nodesString = ",".join(nodesList)
 
     print("\nChecking if the proper files have been created after compilation on all nodes (%s):" % nodesString)
     commandsToBeChecked = ["ls -l /usr/lpp/mmfs/bin/lxtrace-`uname -r`",
@@ -605,7 +606,7 @@ def checkFilesAfterCompilationOnAllNodes(system, nodesWithoutTargetNode):
                            "ls -l /lib/modules/`uname -r`/extra/mmfslinux.ko",
                            "ls -l /lib/modules/`uname -r`/extra/tracedev.ko"]
 
-    for node in nodesWithoutTargetNode:
+    for node in nodesList:
         for cmd in commandsToBeChecked:
             system.sendline("mmdsh -N %s " % node + cmd + '| awk \'{print $1 $6, $7, $8, $9, $10}\'; echo \"${PIPESTATUS[0]}\"')
             system.prompt()
@@ -621,6 +622,7 @@ def checkFilesAfterCompilationOnAllNodes(system, nodesWithoutTargetNode):
     if not allFilesExistOnAllNodes:
         sys.exit("FAIL : Can't find necessary files on some nodes. "
                  "Check /tmp/gpfs_autoinstall.log for details\n")
+
 
 def rebootAllNodes(system):
     print("\nRebooting all nodes...")
@@ -654,8 +656,7 @@ if __name__ == "__main__":
 
     try:
         cs = pxssh.pxssh()
-        fout = file('/tmp/gpfs_autoinstall.log', 'w')
-        cs.logfile = fout
+        cs.logfile = file(LOG_FILE_PATH, 'w')
 
         print("\n\nSSH-ing to ETERNUS CS (%s)..." % host)
         cs.login(host, user, password)
@@ -672,19 +673,14 @@ if __name__ == "__main__":
         if userAnswer:
             nodesList = checkIfNodesAreActive(cs)
             nodesWithoutTargetNode = [nodeName for nodeName in nodesList if nodeName != targetNode]
+
             if len(nodesList) != 1:
                 oneNodeSystem = False
 
-            icpList, idpList = extractNodeTypes(nodesList)
+            #icpList, idpList = extractNodeTypes(nodesList)
             #disableTraces(cs)
             #saveMmlsxxOutput(cs)
 
-
-            #compileCompatibillityLayerOnAllNodes(cs, nodesWithoutTargetNode)
-            checkFilesAfterCompilationOnAllNodes(cs, nodesWithoutTargetNode)
-
-
-            time.sleep(100)
             installDirPath = createInstallDir(cs, gpfsVersion)
             # installDirPath = "/tmp/GPFS.3.5.0.19"
             copyGPFSTarFile(cs, gpfsTarFileName, installDirPath, targetNode)
@@ -715,5 +711,5 @@ if __name__ == "__main__":
             sys.exit("\n## Script has been aborted by the user. ##\n")
 
     except pxssh.ExceptionPxssh, error:
-        print("## pxssh failed on login.")
+        print("## ERROR: pxssh failed on login. ##")
         print(str(error))
