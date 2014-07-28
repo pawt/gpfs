@@ -653,6 +653,7 @@ if __name__ == "__main__":
     host, user, password, gpfsVersion = checkArguments()
 
     oneNodeSystem = True
+    startTime = time.time()
 
     try:
         cs = pxssh.pxssh()
@@ -707,6 +708,9 @@ if __name__ == "__main__":
             rebootAllNodes(cs)
             print("\n===== GPFS install procedure finished successfully =====")
 
+            elapsedTime = time.clock() - startTime
+            print("WOW! GPFS reinstallation only took: " + str(elapsedTime))
+            
         else:
             sys.exit("\n## Script has been aborted by the user. ##\n")
 
