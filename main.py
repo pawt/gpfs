@@ -21,7 +21,7 @@ import pexpect
 
 
 LOG_FILE_PATH = "/tmp/gpfs_autoinstall.log"
-
+CORRECT_MMDSH_OUTPUT = "remote shell process had return code 1\.$"
 
 def exit_with_usage():
     print(globals()['__doc__'])
@@ -210,7 +210,10 @@ def checkIfNodesAreActive(system):
     return [node.lower() for node in activeNodeList.keys()]  # returns the list of all nodes names
 
 
-def disableTraces(system):
+def disableTraces(system, oneNodeSystem):
+
+    tracesSuccessfullyDisabled = True
+
     print("\nDisabling all active traces...")
     system.sendline("mmtracectl --stop;mmtracectl --off")
     system.prompt()
@@ -222,16 +225,27 @@ def disableTraces(system):
         system.sendline('mmdsh "ps -ef|grep lxtrace|grep -v grep| grep -v ssh"| sort')
         system.prompt()
         tmpCmdOutput = system.before.splitlines()[1:]
-        # if there is no answer it's OK
-        if not tmpCmdOutput:
+
+        #if there is no answer or the answer is "mmdsh: <node> remote shell process had return code 1." - it's OK
+
+        if oneNodeSystem:
+            if not tmpCmdOutput:
+                tracesSuccessfullyDisabled = False
+        else:
+            for line in tmpCmdOutput:
+                if not re.search(CORRECT_MMDSH_OUTPUT, line):
+                    tracesSuccessfullyDisabled = False
+
+
+        if tracesSuccessfullyDisabled:
             print("OK : Traces disabled.")
         else:
-            print("FAIL\nERROR : Some traces are still active")
+            print("FAIL : Some traces are still active aaaaa")
             for line in tmpCmdOutput:
                 print(line)
             sys.exit()
     else:
-        print("FAIL\nERROR : Can't stop traces.")
+        print("FAIL : Can't stop traces.")
         for line in mmTraceCtlOutput:
             print(line)
         sys.exit()
@@ -246,7 +260,7 @@ def saveMmlsxxOutput(system):
 
     try:
         if re.search(r'mmcheck[\.\d]+_ saved\.', cmdOutput[0]):
-            print("OK : cs_gpfs_]ls_check executed.")
+            print("OK : cs_gpfs_lls_check executed.")
             print("\nChecking if a file with mmlsxx commands has been created...")
             system.sendline("find /tmp -name mmcheck.*_")
             system.prompt()
@@ -379,14 +393,26 @@ def stoppingCSProcesses(system):
         sys.exit()
 
 
-def stoppingHSMDaemons(system):
+def stoppingHSMDaemons(system, oneNodeSystem):
+
+    HSMDaemonsRunning = False
     # TODO: this procedure should be tested in negative scenario
     print("\nChecking if there are any HSM daemons running...")
+    # DODAC to samo co w disableTraces
     system.sendline('mmdsh "ps -ef| grep dsm|grep -v grep|grep -v ssh"| sort')
     system.prompt()
     grepDsmOutput = system.before.splitlines()[1:]
 
-    if grepDsmOutput:
+
+    if oneNodeSystem:
+        if not grepDsmOutput:
+            HSMDaemonsRunning = True
+    else:
+        for line in grepDsmOutput:
+            if not re.search(CORRECT_MMDSH_OUTPUT, line):
+                HSMDaemonsRunning = True
+
+    if HSMDaemonsRunning:
         print("There are some HSM daemons that need to be stopped:")
         for line in grepDsmOutput:
             print(line)
@@ -406,7 +432,9 @@ def stoppingHSMDaemons(system):
         print("OK : There are no HSM daemons running on any node.")
 
 
-def unmountingInstall2000(system):
+def unmountingInstall2000(system, oneNodeSystem):
+
+    install2000UnmountedOK = True
     print("\nUnmounting directory /install2000...")
 
     # unmounting /install2000 on all nodes
@@ -419,7 +447,15 @@ def unmountingInstall2000(system):
 
     grepInstall2000Output = system.before.splitlines()[1:]
 
-    if not grepInstall2000Output:
+    if oneNodeSystem:
+        if not grepInstall2000Output:
+            install2000UnmountedOK = False
+    else:
+        for line in grepInstall2000Output:
+            if not re.search(CORRECT_MMDSH_OUTPUT, line):
+                install2000UnmountedOK = False
+
+    if install2000UnmountedOK:
         print("OK : /install2000 unmounted.")
     else:
         print("FAIL: /install2000 is still mounted on some nodes:")
@@ -442,8 +478,11 @@ def stoppingNfsServer(system):
         print(line)
 
 
-def unmountingFileSystems(system):
+def unmountingFileSystems(system, oneNodeSystem):
     # TODO: needs to be tested on multiNode system
+
+    unmountingOK = True
+
     print("\nUnmounting file systems on all nodes...")
     system.sendline('mmumount all -a')
     system.prompt()
@@ -455,7 +494,15 @@ def unmountingFileSystems(system):
 
     grepMountsOutput = system.before.splitlines()[1:]
 
-    if not grepMountsOutput:
+    if oneNodeSystem:
+        if not grepMountsOutput:
+            unmountingOK = False
+    else:
+        for line in grepMountsOutput:
+            if not re.search(CORRECT_MMDSH_OUTPUT, line):
+                unmountingOK = False
+
+    if unmountingOK:
         print("OK : Unmounting completed successfully.")
     else:
         print("FAIL : Can't unmount all file systems on some nodes:  ")
@@ -534,7 +581,7 @@ def checkFilesAfterCompilationOnTargetNode(system):
     for cmd in commandsToBeChecked:
         system.sendline(cmd + "| awk \'{print $1 $6, $7, $8, $9, $10}\' ; echo $?")
         system.prompt()
-        cmdOutput = system.before.splitlines()[1:]
+        cmdOutput = system.before.splitlines()[2:]
         if cmdOutput[-1] == "0":
             print("OK : " + cmdOutput[0])
         else:
@@ -679,11 +726,10 @@ if __name__ == "__main__":
                 oneNodeSystem = False
 
             #icpList, idpList = extractNodeTypes(nodesList)
-            #disableTraces(cs)
-            #saveMmlsxxOutput(cs)
+            disableTraces(cs, oneNodeSystem)
+            saveMmlsxxOutput(cs)
 
             installDirPath = createInstallDir(cs, gpfsVersion)
-            # installDirPath = "/tmp/GPFS.3.5.0.19"
             copyGPFSTarFile(cs, gpfsTarFileName, installDirPath, targetNode)
 
             if not oneNodeSystem:
@@ -691,10 +737,10 @@ if __name__ == "__main__":
 
             unpackGPFSTar(cs, installDirPath, gpfsTarFileName)
             stoppingCSProcesses(cs)
-            stoppingHSMDaemons(cs)
-            unmountingInstall2000(cs)
+            stoppingHSMDaemons(cs, oneNodeSystem)
+            unmountingInstall2000(cs, oneNodeSystem)
             stoppingNfsServer(cs)
-            unmountingFileSystems(cs)
+            unmountingFileSystems(cs, oneNodeSystem)
             unloadKernelModules(cs)
             installGPFSOnTargetNode(cs, targetNode, installDirPath)
             compileCompatibillityLayerOnTargetNode(cs, targetNode)
@@ -709,8 +755,10 @@ if __name__ == "__main__":
             print("\n===== GPFS install procedure finished successfully =====")
 
             elapsedTime = time.clock() - startTime
+            print("Current time " + str(time.clock))
+            print("Start time " + str(startTime))
             print("WOW! GPFS reinstallation only took: " + str(elapsedTime))
-            
+
         else:
             sys.exit("\n## Script has been aborted by the user. ##\n")
 

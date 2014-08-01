@@ -31,8 +31,8 @@
       <file leaf-file-name="main.py" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.7161937" vertical-offset="11675" max-vertical-offset="12308">
-              <caret line="712" column="12" selection-start-line="712" selection-start-column="12" selection-end-line="712" selection-end-column="12" />
+            <state vertical-scroll-proportion="0.6785317" vertical-offset="12191" max-vertical-offset="13124">
+              <caret line="753" column="30" selection-start-line="753" selection-start-column="30" selection-end-line="753" selection-end-column="30" />
               <folding>
                 <element signature="e#257#294#0" expanded="true" />
               </folding>
@@ -63,10 +63,10 @@
     </option>
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="800" />
+    <option name="x" value="960" />
     <option name="y" value="27" />
-    <option name="width" value="801" />
-    <option name="height" value="810" />
+    <option name="width" value="961" />
+    <option name="height" value="1110" />
   </component>
   <component name="ProjectLevelVcsManager" settingsEditedManually="false">
     <OptionsSetting value="true" id="Add" />
@@ -285,7 +285,7 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="800" y="27" width="801" height="810" extended-state="4" />
+    <frame x="960" y="27" width="961" height="1110" extended-state="4" />
     <editor active="true" />
     <layout>
       <window_info id="Changes" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32910052" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
@@ -328,7 +328,7 @@
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
-      <option name="time" value="7" />
+      <option name="time" value="9" />
     </breakpoint-manager>
   </component>
   <component name="editorHistoryManager">
@@ -342,8 +342,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.7161937" vertical-offset="11675" max-vertical-offset="12308">
-          <caret line="712" column="12" selection-start-line="712" selection-start-column="12" selection-end-line="712" selection-end-column="12" />
+        <state vertical-scroll-proportion="0.6785317" vertical-offset="12191" max-vertical-offset="13124">
+          <caret line="753" column="30" selection-start-line="753" selection-start-column="30" selection-end-line="753" selection-end-column="30" />
           <folding>
             <element signature="e#257#294#0" expanded="true" />
           </folding>
