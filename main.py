@@ -262,7 +262,7 @@ def saveMmlsxxOutput(system):
         if re.search(r'mmcheck[\.\d]+_ saved\.', cmdOutput[0]):
             print("OK : cs_gpfs_lls_check executed.")
             print("\nChecking if a file with mmlsxx commands has been created...")
-            system.sendline("find /tmp -name mmcheck.*_")
+            system.sendline("find /tmp -name 'mmcheck.*_'")
             system.prompt()
             findMmcheckOutput = system.before.splitlines()[1:]
             if findMmcheckOutput[0]:
@@ -421,7 +421,6 @@ def stoppingHSMDaemons(system, oneNodeSystem):
 
         if userDecision:
             print("\nStopping HSM daemons...")
-            # TODO: this part has not been tested (use KAUZI?)
             system.sendline('mmdsh "dsmmigfs stop"')
             system.prompt(timeout=60)
             dsmmigfsOutput = system.before.splitlines()[1:]
@@ -557,7 +556,7 @@ def compileCompatibillityLayerOnTargetNode(system, targetNode):
     print("\nCompiling compatibility layer on the main node (%s)..." % targetNode)
     system.sendline('export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
                     cd /usr/lpp/mmfs/src; make Autoconfig; make World; make InstallImages;echo $?')
-    system.prompt()
+    system.prompt(timeout=60)
 
     exportCmdResult = system.before.splitlines()[-1]
 
@@ -604,16 +603,16 @@ def installGPFSOnAllNodes(system, nodesList, installDirPath):
     if userAnswer:
         for node in nodesList:
             system.sendline('mmdsh -N %s "rpm -Uhv %s/*.rpm"' % (node, installDirPath))
-            system.prompt(timeout=20)
+            system.prompt(timeout=60)
             print("OK : Installation completed on node: %s" % node)
 
-    print("\nChecking currently installed packages (should be updated to a new GPFS version)")
-    for node in nodesList:
-        system.sendline('mmdsh -L %s "rpm -qa| grep -i gpfs"| sort' % node)
-        system.prompt()
-        for line in system.before.splitlines()[1:]:
-            print(line)
-        print("")
+        print("\nChecking currently installed packages (should be updated to a new GPFS version)")
+        for node in nodesList:
+            system.sendline('mmdsh -L %s "rpm -qa| grep -i gpfs"| sort' % node)
+            system.prompt()
+            for line in system.before.splitlines()[1:]:
+                print(line)
+            print("")
     else:
         sys.exit("\n## Script has been aborted by the user. ##\n")
 
@@ -628,11 +627,18 @@ def compileCompatibillityLayerOnAllNodes(system, nodesList):
         system.sendline('mmdsh -N %s "export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
                         cd /usr/lpp/mmfs/src; make Autoconfig; make World; '
                         'make InstallImages;echo $?"' % node)
-        system.prompt(timeout=30)
+        system.prompt(timeout=60)
 
         exportCmdResult = system.before.splitlines()[1:]
 
-        if exportCmdResult[-1] == "0":
+        #TODO: here is the error (the comparison =="0")
+        #TODO: should be corrected so that it will match correctly
+        # IUP1.cs-intern:  make[2]: Leaving directory `/usr/src/linux-3.0.101-0.21.1.6916.0.PTF-obj/x86_64/default'
+        #IUP1.cs-intern:  make[1]: Leaving directory `/usr/lpp/mmfs/src/gpl-linux'
+        #IUP1.cs-intern:  0
+
+        # checks if the command has been executed successfully
+        if exportCmdResult[-1].split()[-1] == "0":
             print(node + ": OK")
         else:
             print(node + ": FAIL")
@@ -700,7 +706,7 @@ if __name__ == "__main__":
     host, user, password, gpfsVersion = checkArguments()
 
     oneNodeSystem = True
-    startTime = time.time()
+    startTime = time.clock()
 
     try:
         cs = pxssh.pxssh()
@@ -752,12 +758,9 @@ if __name__ == "__main__":
                 checkFilesAfterCompilationOnAllNodes(cs, nodesWithoutTargetNode)
 
             rebootAllNodes(cs)
-            print("\n===== GPFS install procedure finished successfully =====")
 
-            elapsedTime = time.clock() - startTime
-            print("Current time " + str(time.clock))
-            print("Start time " + str(startTime))
-            print("WOW! GPFS reinstallation only took: " + str(elapsedTime))
+            print("\n===== GPFS install procedure finished successfully =====")
+            print("WOW! GPFS reinstallation only took: %s seconds" % (time.clock() - startTime))
 
         else:
             sys.exit("\n## Script has been aborted by the user. ##\n")
