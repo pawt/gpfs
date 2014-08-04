@@ -22,6 +22,7 @@ import pexpect
 
 LOG_FILE_PATH = "/tmp/gpfs_autoinstall.log"
 CORRECT_MMDSH_OUTPUT = "remote shell process had return code 1\.$"
+EXPECT_TIMEOUT = 30
 
 def exit_with_usage():
     print(globals()['__doc__'])
@@ -167,8 +168,9 @@ def checkCurrentGPFSVersion(system):
     print("\nChecking currently installed GPFS version...")
     # system.sendline("mmdsh 'mmfsadm dump version | grep Build'")
     system.sendline('mmfsadm dump version | grep Build | awk -F \\" \'{print $2}\' | sed \'s/ /_/g\'')
-    system.prompt()
+    system.prompt(timeout=30)
     checkGPFSVersionOutput = system.before.splitlines()[2:]
+
 
     if re.search(r'[\d._]+', checkGPFSVersionOutput[0]):
         print("Current GPFS version: " + checkGPFSVersionOutput[0])
@@ -214,47 +216,47 @@ def disableTraces(system, oneNodeSystem):
 
     tracesSuccessfullyDisabled = True
 
-    print("\nDisabling all active traces...")
+    print("\nDisabling all active traces. It may take some time, please wait...")
     system.sendline("mmtracectl --stop;mmtracectl --off")
+    system.prompt(timeout=120) #disabling traces takes a lot of time
+
+    #expectedAnswer = "mmchconfig: Command successfully completed"
+    #mmTraceCtlOutput = system.before.splitlines()[1:]
+
+    #if mmTraceCtlOutput[0] == expectedAnswer:
+    system.sendline('mmdsh "ps -ef|grep lxtrace|grep -v grep| grep -v ssh"| sort')
     system.prompt()
+    tmpCmdOutput = system.before.splitlines()[1:]
 
-    expectedAnswer = "mmchconfig: Command successfully completed"
-    mmTraceCtlOutput = system.before.splitlines()[1:]
+    #if there is no answer or the answer is "mmdsh: <node> remote shell process had return code 1." - it's OK
 
-    if mmTraceCtlOutput[0] == expectedAnswer:
-        system.sendline('mmdsh "ps -ef|grep lxtrace|grep -v grep| grep -v ssh"| sort')
-        system.prompt()
-        tmpCmdOutput = system.before.splitlines()[1:]
-
-        #if there is no answer or the answer is "mmdsh: <node> remote shell process had return code 1." - it's OK
-
-        if oneNodeSystem:
-            if not tmpCmdOutput:
-                tracesSuccessfullyDisabled = False
-        else:
-            for line in tmpCmdOutput:
-                if not re.search(CORRECT_MMDSH_OUTPUT, line):
-                    tracesSuccessfullyDisabled = False
-
-
-        if tracesSuccessfullyDisabled:
-            print("OK : Traces disabled.")
-        else:
-            print("FAIL : Some traces are still active aaaaa")
-            for line in tmpCmdOutput:
-                print(line)
-            sys.exit()
+    if oneNodeSystem:
+        if not tmpCmdOutput:
+            tracesSuccessfullyDisabled = False
     else:
-        print("FAIL : Can't stop traces.")
-        for line in mmTraceCtlOutput:
+        for line in tmpCmdOutput:
+            if not re.search(CORRECT_MMDSH_OUTPUT, line):
+                tracesSuccessfullyDisabled = False
+
+
+    if tracesSuccessfullyDisabled:
+        print("OK : Traces disabled.")
+    else:
+        print("FAIL : Some traces are still active")
+        for line in tmpCmdOutput:
             print(line)
         sys.exit()
+    #else:
+        #print("FAIL : Can't stop traces.")
+        #for line in mmTraceCtlOutput:
+            #print(line)
+        #sys.exit()
 
 
 def saveMmlsxxOutput(system):
     print("\nExecuting cs_gpfs_ls_check script...")
     system.sendline("chmod 722 /tmp/cs_gpfs_ls_check; cd /tmp; ./cs_gpfs_ls_check")
-    system.prompt(timeout=30)
+    system.prompt(timeout=180)
 
     cmdOutput = system.before.splitlines()[1:]
 
@@ -556,7 +558,7 @@ def compileCompatibillityLayerOnTargetNode(system, targetNode):
     print("\nCompiling compatibility layer on the main node (%s)..." % targetNode)
     system.sendline('export SHARKCLONEROOT=/usr/lpp/mmfs/src; \
                     cd /usr/lpp/mmfs/src; make Autoconfig; make World; make InstallImages;echo $?')
-    system.prompt(timeout=60)
+    system.prompt(timeout=40)
 
     exportCmdResult = system.before.splitlines()[-1]
 
@@ -603,7 +605,7 @@ def installGPFSOnAllNodes(system, nodesList, installDirPath):
     if userAnswer:
         for node in nodesList:
             system.sendline('mmdsh -N %s "rpm -Uhv %s/*.rpm"' % (node, installDirPath))
-            system.prompt(timeout=60)
+            system.prompt(timeout=40)
             print("OK : Installation completed on node: %s" % node)
 
         print("\nChecking currently installed packages (should be updated to a new GPFS version)")
@@ -706,10 +708,9 @@ if __name__ == "__main__":
     host, user, password, gpfsVersion = checkArguments()
 
     oneNodeSystem = True
-    startTime = time.clock()
 
     try:
-        cs = pxssh.pxssh()
+        cs = pxssh.pxssh(timeout=EXPECT_TIMEOUT)
         cs.logfile = file(LOG_FILE_PATH, 'w')
 
         print("\n\nSSH-ing to ETERNUS CS (%s)..." % host)
@@ -760,7 +761,7 @@ if __name__ == "__main__":
             rebootAllNodes(cs)
 
             print("\n===== GPFS install procedure finished successfully =====")
-            print("WOW! GPFS reinstallation only took: %s seconds" % (time.clock() - startTime))
+
 
         else:
             sys.exit("\n## Script has been aborted by the user. ##\n")
